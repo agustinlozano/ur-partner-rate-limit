@@ -1,36 +1,28 @@
-import type {
-  APIGatewayProxyEvent,
-  APIGatewayProxyResult,
-  Context,
-} from "aws-lambda";
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
+
 import middy from "@middy/core";
 import httpErrorHandler from "@middy/http-error-handler";
 import httpCors from "@middy/http-cors";
 import httpJsonBodyParser from "@middy/http-json-body-parser";
 
 import type { RateLimitRequest, RateLimitResponse } from "./types";
+import { ServiceFactory } from "./services";
 
 // Initialize Hono app
 const app = new Hono();
+
+// Initialize services
+const rateLimitService = ServiceFactory.getRateLimitService();
+const configService = ServiceFactory.getConfigService();
 
 // Routes
 app.post("/check", async (c) => {
   try {
     const body = (await c.req.json()) as RateLimitRequest;
 
-    // TODO: Implement rate limiting logic
-    const response: RateLimitResponse = {
-      allowed: true,
-      remaining: 2,
-      resetTime: Date.now() + 3600000, // 1 hour from now
-      metadata: {
-        serviceId: body.serviceId,
-        windowMs: 3600000,
-        maxRequests: 3,
-      },
-    };
+    // Use the rate limiting service
+    const response = await rateLimitService.checkRateLimit(body);
 
     return c.json(response);
   } catch (error) {
@@ -40,25 +32,53 @@ app.post("/check", async (c) => {
 });
 
 app.get("/config", async (c) => {
-  // TODO: Implement config retrieval
-  return c.json({ message: "Config endpoint - TODO" });
+  try {
+    const configs = await configService.getAllServiceConfigs();
+    return c.json({ configs });
+  } catch (error) {
+    console.error("Error getting all configs:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
 });
 
 app.post("/config", async (c) => {
-  // TODO: Implement config creation
-  return c.json({ message: "Config creation - TODO" });
+  try {
+    const body = await c.req.json();
+    await configService.saveServiceConfig(body);
+    return c.json({ message: "Configuration saved successfully" });
+  } catch (error) {
+    console.error("Error saving config:", error);
+    return c.json({ error: "Internal server error" }, 500);
+  }
 });
 
 app.get("/config/:serviceId", async (c) => {
-  const serviceId = c.req.param("serviceId");
-  // TODO: Implement specific config retrieval
-  return c.json({ message: `Config for ${serviceId} - TODO` });
+  try {
+    const serviceId = c.req.param("serviceId");
+    const config = await configService.getServiceConfig(serviceId);
+    return c.json({ config });
+  } catch (error) {
+    console.error(
+      `Error getting config for ${c.req.param("serviceId")}:`,
+      error
+    );
+    return c.json({ error: "Internal server error" }, 500);
+  }
 });
 
 app.put("/config/:serviceId", async (c) => {
-  const serviceId = c.req.param("serviceId");
-  // TODO: Implement config update
-  return c.json({ message: `Config update for ${serviceId} - TODO` });
+  try {
+    const serviceId = c.req.param("serviceId");
+    const body = await c.req.json();
+    await configService.updateServiceConfig(serviceId, body.rules);
+    return c.json({ message: "Configuration updated successfully" });
+  } catch (error) {
+    console.error(
+      `Error updating config for ${c.req.param("serviceId")}:`,
+      error
+    );
+    return c.json({ error: "Internal server error" }, 500);
+  }
 });
 
 // Health check
