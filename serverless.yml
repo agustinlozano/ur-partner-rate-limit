@@ -1,0 +1,163 @@
+service: rate-limit-service
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: us-east-2
+  timeout: 10 # Rate limiting should be fast
+  memorySize: 512 # Lightweight service
+  architecture: arm64 # Better performance/cost ratio
+
+  # Environment variables
+  environment:
+    RATE_LIMIT_CONFIG_TABLE: RateLimitConfig
+    RATE_LIMIT_USAGE_TABLE: RateLimitUsage
+    NODE_ENV: ${opt:stage, 'dev'}
+
+  # IAM Permissions for DynamoDB
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:Query
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource:
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/RateLimitConfig
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/RateLimitUsage
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/RateLimitUsage/index/*
+
+# Custom esbuild configuration
+custom:
+  esbuild:
+    bundle: true
+    minify: true
+    target: node20
+    exclude: ["aws-sdk"]
+    external: []
+    keepNames: false
+    sourcemap: false
+
+functions:
+  checkRateLimit:
+    handler: dist/index.handler
+    description: "Check if client is within rate limits for a service"
+    events:
+      - http:
+          path: /check
+          method: post
+          cors:
+            origin: "*"
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Forwarded-For
+            allowCredentials: false
+      - http:
+          path: /check
+          method: options
+          cors:
+            origin: "*"
+            headers:
+              - Content-Type
+              - Authorization
+              - X-Forwarded-For
+            allowCredentials: false
+
+  configService:
+    handler: dist/index.configHandler
+    description: "Manage rate limiting configurations"
+    events:
+      - http:
+          path: /config
+          method: get
+          cors: true
+      - http:
+          path: /config
+          method: post
+          cors: true
+      - http:
+          path: /config/{serviceId}
+          method: get
+          cors: true
+      - http:
+          path: /config/{serviceId}
+          method: put
+          cors: true
+
+# CloudFormation resources for DynamoDB tables
+resources:
+  Resources:
+    # Rate Limit Configuration Table
+    RateLimitConfigTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: RateLimitConfig
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: serviceId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: serviceId
+            KeyType: HASH
+        Tags:
+          - Key: Service
+            Value: RateLimit
+          - Key: Environment
+            Value: ${opt:stage, 'dev'}
+
+    # Rate Limit Usage Table
+    RateLimitUsageTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: RateLimitUsage
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: pk
+            AttributeType: S
+          - AttributeName: sk
+            AttributeType: S
+          - AttributeName: timestamp
+            AttributeType: N
+        KeySchema:
+          - AttributeName: pk
+            KeyType: HASH
+          - AttributeName: sk
+            KeyType: RANGE
+        TimeToLiveSpecification:
+          AttributeName: ttl
+          Enabled: true
+        GlobalSecondaryIndexes:
+          - IndexName: TimestampIndex
+            KeySchema:
+              - AttributeName: pk
+                KeyType: HASH
+              - AttributeName: timestamp
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+        Tags:
+          - Key: Service
+            Value: RateLimit
+          - Key: Environment
+            Value: ${opt:stage, 'dev'}
+
+plugins:
+  - serverless-esbuild
+  - serverless-offline
+
+# Package configuration
+package:
+  exclude:
+    - node_modules/**
+    - src/**
+    - tests/**
+    - "*.md"
+    - ".git/**"
+  include:
+    - dist/**
