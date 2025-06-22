@@ -1,0 +1,54 @@
+{
+  "name": "rate-limit-service",
+  "version": "1.0.0",
+  "description": "Microservice for rate limiting across multiple APIs and services",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --external:aws-sdk",
+    "dev": "pnpm build && serverless offline",
+    "deploy": "pnpm build && serverless deploy",
+    "remove": "serverless remove",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.830.0",
+    "@aws-sdk/lib-dynamodb": "^3.830.0",
+    "@middy/core": "^5.2.0",
+    "@middy/http-cors": "^5.2.0",
+    "@middy/http-error-handler": "^5.2.0",
+    "@middy/http-json-body-parser": "^5.2.0",
+    "@middy/validator": "^5.2.0",
+    "hono": "^4.6.3"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.150",
+    "@types/node": "^22.15.32",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "esbuild": "^0.21.5",
+    "eslint": "^8.57.0",
+    "serverless": "^3.40.0",
+    "serverless-esbuild": "^1.55.1",
+    "serverless-offline": "^14.4.0",
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "aws-lambda",
+    "rate-limiting",
+    "microservice",
+    "hono",
+    "middy",
+    "typescript",
+    "dynamodb"
+  ],
+  "author": "",
+  "license": "MIT"
+}
