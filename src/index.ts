@@ -6,8 +6,17 @@ import httpErrorHandler from "@middy/http-error-handler";
 import httpCors from "@middy/http-cors";
 import httpJsonBodyParser from "@middy/http-json-body-parser";
 
-import type { RateLimitRequest, RateLimitResponse } from "./types";
+import type {
+  RateLimitRequest,
+  RateLimitRequestInput,
+  RateLimitResponse,
+} from "./types";
 import { ServiceFactory } from "./services";
+import {
+  extractClientId,
+  extractUserTier,
+  extractRequestMetadata,
+} from "./utils/extract-client-info";
 
 // Initialize Hono app
 const app = new Hono();
@@ -19,10 +28,28 @@ const configService = ServiceFactory.getConfigService();
 // Routes
 app.post("/check", async (c) => {
   try {
-    const body = (await c.req.json()) as RateLimitRequest;
+    const body = (await c.req.json()) as RateLimitRequestInput;
+
+    // ✅ Extract client information automatically from request
+    const clientId = body.clientId || extractClientId(c);
+    const userTier = body.metadata?.userTier || extractUserTier(c);
+    const requestMetadata = extractRequestMetadata(c);
+
+    // Build complete rate limit request
+    const rateLimitRequest: RateLimitRequest = {
+      serviceId: body.serviceId,
+      clientId, // ← Extracted automatically, not from body
+      metadata: {
+        ...body.metadata,
+        userTier,
+        ...requestMetadata,
+        // Log the extraction method for debugging
+        extractionMethod: body.clientId ? "provided" : "auto-extracted",
+      },
+    };
 
     // Use the rate limiting service
-    const response = await rateLimitService.checkRateLimit(body);
+    const response = await rateLimitService.checkRateLimit(rateLimitRequest);
 
     return c.json(response);
   } catch (error) {

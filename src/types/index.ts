@@ -1,12 +1,28 @@
 // Rate Limiting Request and Response Types
-export interface RateLimitRequest {
+
+// Input interface - what clients send (clientId is optional)
+export interface RateLimitRequestInput {
   serviceId: string; // "upload-images", "api-general", "auth", etc.
-  clientId: string; // IP address, user ID, API key, etc.
+  clientId?: string; // Optional - will be extracted from request if not provided
   metadata?: {
     // Optional context data
     userId?: string;
     endpoint?: string;
-    userTier?: "free" | "pro" | "enterprise";
+    userTier?: "free" | "pro" | "enterprise" | "default";
+    [key: string]: any;
+  };
+}
+
+// Internal interface - what the service uses (clientId is required)
+export interface RateLimitRequest {
+  serviceId: string; // "upload-images", "api-general", "auth", etc.
+  clientId: string; // Always required internally - extracted automatically
+  metadata?: {
+    // Optional context data
+    userId?: string;
+    endpoint?: string;
+    userTier?: "free" | "pro" | "enterprise" | "default";
+    [key: string]: any;
   };
 }
 
