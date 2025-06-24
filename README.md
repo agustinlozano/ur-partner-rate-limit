@@ -113,6 +113,22 @@ Internet → API Gateway → Lambda (Hono + Middy) → DynamoDB
 
 ## 📊 **Default Configuration**
 
+**What is `windowMs`?**
+
+- `windowMs` is the time window (in milliseconds) during which requests are counted for rate limiting.
+- For each client, only `maxRequests` are allowed within this window.
+- After the window passes, the count resets and new requests are allowed.
+
+**Conversion examples:**
+
+```js
+// 1 second = 1,000 ms
+// 1 minute = 60,000 ms
+// 1 hour   = 3,600,000 ms
+// 2 hours  = 7,200,000 ms
+// 30 min   = 1,800,000 ms
+```
+
 - **upload-images**: 2 requests/2 hours (default), 5 requests/hour (pro), 10 requests/30min (enterprise)
 - **api-general**: 3 requests/hour (default), 10 requests/hour (pro), 50 requests/hour (enterprise)
 - **auth**: 5 requests/15min (default), 10 requests/15min (pro), 20 requests/15min (enterprise)
