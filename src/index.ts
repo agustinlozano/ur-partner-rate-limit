@@ -1,16 +1,8 @@
 import { Hono } from "hono";
 import { handle } from "hono/aws-lambda";
+import { cors } from "hono/cors";
 
-import middy from "@middy/core";
-import httpErrorHandler from "@middy/http-error-handler";
-import httpCors from "@middy/http-cors";
-import httpJsonBodyParser from "@middy/http-json-body-parser";
-
-import type {
-  RateLimitRequest,
-  RateLimitRequestInput,
-  RateLimitResponse,
-} from "./types";
+import type { RateLimitRequest, RateLimitRequestInput } from "./types";
 import { ServiceFactory } from "./services";
 import {
   extractClientId,
@@ -20,6 +12,16 @@ import {
 
 // Initialize Hono app
 const app = new Hono();
+
+// Add CORS middleware
+app.use(
+  "*",
+  cors({
+    origin: "*",
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Forwarded-For"],
+  })
+);
 
 // Initialize services
 const rateLimitService = ServiceFactory.getRateLimitService();
@@ -113,19 +115,8 @@ app.get("/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Convert Hono app to Lambda handler
-const honoHandler = handle(app);
-
-// Wrap with Middy middleware
-export const handler = middy(honoHandler)
-  .use(httpJsonBodyParser())
-  .use(
-    httpCors({
-      origin: "*",
-      credentials: false,
-    })
-  )
-  .use(httpErrorHandler());
+// Convert Hono app to Lambda handler (Hono handles CORS and JSON parsing internally)
+export const handler = handle(app);
 
 // Config handler (separate function for serverless.yml)
 export const configHandler = handler;
