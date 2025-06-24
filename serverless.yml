@@ -1,6 +1,6 @@
 service: rate-limit-service
 
-frameworkVersion: "3"
+frameworkVersion: "4"
 
 provider:
   name: aws
@@ -9,6 +9,8 @@ provider:
   timeout: 10 # Rate limiting should be fast
   memorySize: 512 # Lightweight service
   architecture: arm64 # Better performance/cost ratio
+  deploymentBucket:
+    name: ur-partner # Replace with your bucket name
 
   # Environment variables
   environment:
@@ -32,20 +34,18 @@ provider:
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/RateLimitUsage
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/RateLimitUsage/index/*
 
-# Custom esbuild configuration
-custom:
+# Built-in esbuild configuration for Serverless v4
+build:
   esbuild:
     bundle: true
     minify: true
     target: node20
     exclude: ["aws-sdk"]
-    external: []
-    keepNames: false
     sourcemap: false
 
 functions:
   checkRateLimit:
-    handler: dist/index.handler
+    handler: src/index.handler
     description: "Check if client is within rate limits for a service"
     events:
       - http:
@@ -70,7 +70,7 @@ functions:
             allowCredentials: false
 
   configService:
-    handler: dist/index.configHandler
+    handler: src/index.configHandler
     description: "Manage rate limiting configurations"
     events:
       - http:
@@ -148,16 +148,12 @@ resources:
             Value: ${opt:stage, 'dev'}
 
 plugins:
-  - serverless-esbuild
   - serverless-offline
 
-# Package configuration
+# Package configuration (Serverless v4 handles bundling automatically)
 package:
-  exclude:
-    - node_modules/**
-    - src/**
-    - tests/**
-    - "*.md"
-    - ".git/**"
-  include:
-    - dist/**
+  patterns:
+    - "!node_modules/**"
+    - "!tests/**"
+    - "!*.md"
+    - "!.git/**"

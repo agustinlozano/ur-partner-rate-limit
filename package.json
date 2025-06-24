@@ -6,7 +6,7 @@
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --external:aws-sdk",
     "dev": "pnpm build && serverless offline",
-    "deploy": "pnpm build && serverless deploy",
+    "deploy": "serverless deploy",
     "deploy:seed": "pnpm deploy && pnpm seed:configs",
     "seed:configs": "tsx scripts/seed-configs.ts",
     "remove": "serverless remove",
