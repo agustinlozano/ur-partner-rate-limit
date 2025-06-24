@@ -1,0 +1,52 @@
+### Rate Limit Service Demo Requests
+
+# Your deployed API URL
+@baseUrl = https://rs18nrafdd.execute-api.us-east-2.amazonaws.com/dev
+
+### Check rate limit for default tier
+POST {{baseUrl}}/check
+Content-Type: application/json
+
+{
+  "serviceId": "upload-images",
+  "clientId": "test-client-001",
+  "metadata": {
+    "userTier": "default"
+  }
+}
+
+### Check rate limit for pro tier
+POST {{baseUrl}}/check
+Content-Type: application/json
+
+{
+  "serviceId": "upload-images",
+  "clientId": "test-client-002",
+  "metadata": {
+    "userTier": "pro"
+  }
+}
+
+### Check rate limit for enterprise tier
+POST {{baseUrl}}/check
+Content-Type: application/json
+
+{
+  "serviceId": "upload-images",
+  "clientId": "test-client-003",
+  "metadata": {
+    "userTier": "enterprise"
+  }
+}
+
+### Check rate limit for api-general (default tier)
+POST {{baseUrl}}/check
+Content-Type: application/json
+
+{
+  "serviceId": "api-general",
+  "clientId": "test-client-004"
+}
+
+### Health check
+GET {{baseUrl}}/health 
