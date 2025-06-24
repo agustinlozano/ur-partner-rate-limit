@@ -28,59 +28,98 @@ export class RateLimitService {
    * Check if a request is within rate limits
    */
   async checkRateLimit(request: RateLimitRequest): Promise<RateLimitResponse> {
+    const requestId = this.generateRequestId();
+    const startTime = Date.now();
+    console.log(`🟢 [1][${requestId}] Start checkRateLimit`, {
+      serviceId: request.serviceId,
+      clientId: request.clientId,
+      userTier: request.metadata?.userTier || "default",
+      timestamp: new Date().toISOString(),
+    });
     try {
-      // Validate request
+      // 1. Validate request
+      console.log(`🔎 [2][${requestId}] Validating request parameters`);
       this.validateRequest(request);
+      console.log(`✅ [3][${requestId}] Request validated successfully`);
 
-      // Get rate limit configuration
+      // 2. Get rate limit config
       const tier = request.metadata?.userTier || "default";
+      console.log(
+        `📋 [4][${requestId}] Fetching rate limit config for tier: ${tier}`
+      );
       const rateLimit = await this.configService.getRateLimit(
         request.serviceId,
         tier
       );
+      console.log(`📊 [5][${requestId}] Config fetched`, {
+        maxRequests: rateLimit.maxRequests,
+        windowMs: rateLimit.windowMs,
+      });
 
-      // Calculate time window
+      // 3. Calculate time window
       const now = Date.now();
       const windowStart = now - rateLimit.windowMs;
+      console.log(`⏰ [6][${requestId}] Time window calculated`, {
+        now: new Date(now).toISOString(),
+        windowStart: new Date(windowStart).toISOString(),
+      });
 
-      // Get current usage in window
+      // 4. Get current usage in window
+      console.log(`🔢 [7][${requestId}] Querying current usage in DynamoDB`);
       const usageRecords = await this.dynamoService.getUsageInWindow(
         request.serviceId,
         request.clientId,
         windowStart
       );
-
       const currentUsage = usageRecords.length;
       const allowed = currentUsage < rateLimit.maxRequests;
       const remaining = Math.max(0, rateLimit.maxRequests - currentUsage);
+      console.log(`📈 [8][${requestId}] Current usage`, {
+        currentUsage,
+        allowed,
+        remaining,
+      });
 
-      // Calculate reset time (next window start)
+      // 5. Calculate resetTime
       const resetTime = this.calculateNextWindowStart(now, rateLimit.windowMs);
+      console.log(`🔄 [9][${requestId}] Reset time calculated`, {
+        resetTime: new Date(resetTime).toISOString(),
+      });
 
-      // Calculate retry after if blocked
+      // 6. Calculate retryAfter if blocked
       let retryAfter: number | undefined;
       if (!allowed && usageRecords.length > 0) {
-        // Find the oldest request in current window
-        const oldestRequest = usageRecords.reduce((oldest, record) => {
-          return record.timestamp < oldest.timestamp ? record : oldest;
-        });
-
+        console.log(
+          `⏳ [10][${requestId}] Calculating retryAfter for blocked request`
+        );
+        const oldestRequest = usageRecords.reduce((oldest, record) =>
+          record.timestamp < oldest.timestamp ? record : oldest
+        );
         retryAfter = Math.ceil(
           (oldestRequest.timestamp + rateLimit.windowMs - now) / 1000
         );
+        console.log(`⏱️ [11][${requestId}] retryAfter calculated`, {
+          retryAfter,
+        });
       }
 
-      // Record this request if allowed
+      // 7. Record usage if allowed
       if (allowed) {
+        console.log(`📝 [12][${requestId}] Recording usage in DynamoDB`);
         await this.dynamoService.recordUsage(
           request.serviceId,
           request.clientId
+        );
+        console.log(`✅ [13][${requestId}] Usage recorded successfully`);
+      } else {
+        console.log(
+          `🚫 [14][${requestId}] Request blocked, usage not recorded`
         );
       }
 
       const response: RateLimitResponse = {
         allowed,
-        remaining: allowed ? remaining - 1 : remaining, // Subtract 1 if we just recorded
+        remaining: allowed ? remaining - 1 : remaining,
         resetTime,
         metadata: {
           serviceId: request.serviceId,
@@ -88,15 +127,24 @@ export class RateLimitService {
           maxRequests: rateLimit.maxRequests,
         },
       };
-
-      // Only include retryAfter if it has a value
       if (retryAfter !== undefined) {
         response.retryAfter = retryAfter;
       }
-
+      const duration = Date.now() - startTime;
+      console.log(`🏁 [15][${requestId}] checkRateLimit finished`, {
+        allowed,
+        remaining: response.remaining,
+        retryAfter: response.retryAfter,
+        durationMs: duration,
+      });
       return response;
     } catch (error) {
-      console.error("Rate limit check error:", error);
+      const duration = Date.now() - startTime;
+      console.error(`❌ [E][${requestId}] Error in checkRateLimit`, {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        durationMs: duration,
+      });
       throw error;
     }
   }
@@ -115,30 +163,38 @@ export class RateLimitService {
     resetTime: number;
     remaining: number;
   }> {
+    const requestId = this.generateRequestId();
+    console.log(`📊 [1][${requestId}] getUsageStats`, {
+      serviceId,
+      clientId,
+      tier,
+    });
     try {
       const rateLimit = await this.configService.getRateLimit(serviceId, tier);
       const now = Date.now();
       const windowStart = now - rateLimit.windowMs;
-
+      console.log(`🔢 [2][${requestId}] Querying current usage`);
       const usageRecords = await this.dynamoService.getUsageInWindow(
         serviceId,
         clientId,
         windowStart
       );
-
       const currentUsage = usageRecords.length;
       const remaining = Math.max(0, rateLimit.maxRequests - currentUsage);
       const resetTime = this.calculateNextWindowStart(now, rateLimit.windowMs);
-
-      return {
+      const stats = {
         currentUsage,
         maxRequests: rateLimit.maxRequests,
         windowMs: rateLimit.windowMs,
         resetTime,
         remaining,
       };
+      console.log(`📈 [3][${requestId}] Stats fetched`, stats);
+      return stats;
     } catch (error) {
-      console.error("Error getting usage stats:", error);
+      console.error(`❌ [E][${requestId}] Error in getUsageStats`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
@@ -147,11 +203,16 @@ export class RateLimitService {
    * Reset rate limit for a client (admin function)
    */
   async resetRateLimit(serviceId: string, clientId: string): Promise<void> {
+    const requestId = this.generateRequestId();
+    console.log(`🔄 [1][${requestId}] resetRateLimit`, { serviceId, clientId });
     try {
       const now = Date.now();
       await this.dynamoService.cleanupOldUsage(serviceId, clientId, now);
+      console.log(`✅ [2][${requestId}] Rate limit reset`);
     } catch (error) {
-      console.error("Error resetting rate limit:", error);
+      console.error(`❌ [E][${requestId}] Error in resetRateLimit`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
@@ -179,15 +240,20 @@ export class RateLimitService {
   async checkMultipleRateLimits(
     requests: RateLimitRequest[]
   ): Promise<RateLimitResponse[]> {
+    const requestId = this.generateRequestId();
+    console.log(`📦 [1][${requestId}] checkMultipleRateLimits`, {
+      count: requests.length,
+    });
     try {
-      // Process in parallel for better performance
       const results = await Promise.all(
         requests.map((request) => this.checkRateLimit(request))
       );
-
+      console.log(`✅ [2][${requestId}] Bulk check finished`);
       return results;
     } catch (error) {
-      console.error("Error in bulk rate limit check:", error);
+      console.error(`❌ [E][${requestId}] Error in checkMultipleRateLimits`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
@@ -284,5 +350,9 @@ export class RateLimitService {
       console.error("Error preloading configurations:", error);
       // Don't throw - this is an optimization
     }
+  }
+
+  private generateRequestId(): string {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 }
