@@ -68,7 +68,7 @@ export interface RateLimitConfigRecord {
 // Default Configurations
 export const DEFAULT_RATE_LIMITS: Record<string, RateLimitConfig["rules"]> = {
   "upload-images": {
-    default: { windowMs: 7200000, maxRequests: 1 }, // [only 1 to test] TODO: make 2 requests per 2 hours after testing
+    default: { windowMs: 7200000, maxRequests: 2 }, // 2 requests per 2 hours
     pro: { windowMs: 3600000, maxRequests: 5 }, // 5 requests per hour
     enterprise: { windowMs: 1800000, maxRequests: 10 }, // 10 requests per 30 min
   },
