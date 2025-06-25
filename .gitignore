@@ -2,3 +2,5 @@
 .DS_Store
 /scripts
 /src/functions
+/dist
+/.serverless
